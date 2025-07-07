@@ -1,0 +1,99 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+enum SOURCE_STATUS {
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum NOTE_STATUS {
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+
+model User {
+  id        String     @id @default(cuid())
+  clerkId   String     @unique
+  name      String
+  email     String     @unique
+  imageUrl  String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  notebooks Notebook[] @relation("UserNotebooks")
+  @@index([clerkId])
+}
+
+model Notebook {
+  id          String         @id @default(cuid())
+  clerkId     String
+  title       String
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  audioOverview Json?
+  user        User           @relation("UserNotebooks", fields: [clerkId], references: [clerkId], onDelete: Cascade)
+  sources     Source[]
+  notes       Note[]
+  messages    ChatMessage[]
+  @@index([clerkId])
+}
+
+model Source {
+  id          String    @id @default(cuid())
+  sourceTitle String
+  type        String
+  url         String
+  notebookId  String
+  status      SOURCE_STATUS @default(PROCESSING)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  notebook    Notebook  @relation(fields: [notebookId], references: [id] , onDelete: Cascade)
+  @@index([notebookId])
+}
+
+
+model ChatMessage {
+  id          String       @id @default(cuid())
+  sender      String
+  message     String
+  notebookId  String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  notebook    Notebook     @relation(fields: [notebookId], references: [id], onDelete: Cascade)
+  @@index([notebookId])
+}
+
+
+model Note {
+  id          String       @id @default(cuid())
+  title       String?
+  content     String?
+  notebookId  String
+  status      NOTE_STATUS  @default(PROCESSING)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  notebook    Notebook     @relation(fields: [notebookId], references: [id], onDelete: Cascade)
+  @@index([notebookId])
+}
+
+

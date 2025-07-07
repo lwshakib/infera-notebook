@@ -1,0 +1,881 @@
+"use client";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { useNotebookStore } from "@/lib/state";
+import { useQuery } from "@tanstack/react-query";
+import {
+  FileText,
+  Loader2,
+  MoreVertical,
+  Plus,
+  RefreshCw,
+  Search,
+  Sparkles,
+} from "lucide-react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+
+interface Source {
+  id: string;
+  sourceTitle: string;
+  type: string;
+  url?: string;
+  status?: string; // <-- added status property
+  createdAt: Date;
+}
+
+interface SourceUIProps {
+  notebookId?: string;
+}
+
+export function SourceUI({ notebookId }: SourceUIProps) {
+  const [files, setFiles] = useState<File[]>([]);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [discoverModalOpen, setDiscoverModalOpen] = useState(false);
+  const [url, setUrl] = useState("");
+  const [copiedText, setCopiedText] = useState("");
+  const [isFileUploading, setIsFileUploading] = useState(false);
+  const [isAddingSource, setIsAddingSource] = useState(false);
+  const [sources, setSources] = useState<Source[]>([]);
+  const [discoverInterest, setDiscoverInterest] = useState("");
+
+  const { selectedSources, selectSources } = useNotebookStore();
+
+  const { isPending, error, data, refetch, isRefetching } = useQuery({
+    queryKey: ["sources", notebookId],
+    queryFn: async () => {
+      if (!notebookId) return { sources: [] };
+
+      const response = await fetch(`/api/notebooks/${notebookId}/sources`);
+      if (response.ok) {
+        const data = await response.json();
+        return data;
+      }
+      throw new Error("Failed to load sources");
+    },
+    enabled: !!notebookId,
+  });
+
+  useEffect(() => {
+    if (data?.sources) {
+      setSources(data.sources);
+    }
+  }, [data]);
+
+  const handleFileUpload = async (files: File[]) => {
+    if (files.length === 0) return;
+    if (!notebookId) {
+      toast.error("No notebook selected");
+      return;
+    }
+
+    setIsFileUploading(true);
+    setModalOpen(false);
+
+    // Create temporary sources with "UPLOADING" status
+    const tempSources: Source[] = files.map((file, index) => ({
+      id: `temp-upload-${Date.now()}-${index}`,
+      sourceTitle: file.name,
+      type: "file",
+      status: "UPLOADING",
+      createdAt: new Date(),
+    }));
+
+    setSources((prev) => [...prev, ...tempSources]);
+
+    try {
+      const formData = new FormData();
+      files.forEach((file) => {
+        formData.append("files", file);
+      });
+      formData.append("notebookId", notebookId);
+
+      const response = await fetch("/api/file-upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to upload files");
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Remove temp sources and add the real ones with processing status
+        setSources((prev) => {
+          const withoutTemp = prev.filter(
+            (s) => !s.id.startsWith("temp-upload-")
+          );
+          const processingSources = result.sources.map((source: any) => ({
+            ...source,
+            status: "PROCESSING",
+          }));
+          return [...withoutTemp, ...processingSources];
+        });
+
+        setFiles([]);
+        toast.success(result.message);
+        setIsFileUploading(false);
+      } else {
+        throw new Error("Upload failed");
+      }
+    } catch (error) {
+      console.error("Upload error:", error);
+      // Update temp sources to failed status
+      setSources((prev) =>
+        prev.map((s) =>
+          s.id.startsWith("temp-upload-") ? { ...s, status: "FAILED" } : s
+        )
+      );
+      toast.error(
+        error instanceof Error ? error.message : "Failed to upload files"
+      );
+      setIsFileUploading(false);
+    }
+  };
+
+  const handleAddWebsite = async () => {
+    if (!url.trim()) {
+      toast.error("Please enter a valid URL");
+      return;
+    }
+    if (!notebookId) {
+      toast.error("No notebook selected");
+      return;
+    }
+
+    setIsAddingSource(true);
+    const sourceId = `website-${Date.now()}`;
+    try {
+      // Create source with processing status first
+      const newSource: Source = {
+        id: sourceId,
+        sourceTitle: `Website: ${new URL(url).hostname}`,
+        type: "website",
+        url: url,
+        status: "UPLOADING",
+        createdAt: new Date(),
+      };
+
+      setSources((prev) => [...prev, newSource]);
+      setUrl("");
+      setModalOpen(false);
+
+      const response = await fetch(`/api/notebooks/${notebookId}/sources/url`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ websiteUrl: url }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to add website");
+      }
+      const result = await response.json();
+      if (result.success) {
+        // Keep the source in processing status after API success
+        // The backend will handle the actual processing
+        setSources((prev) =>
+          prev.map((s) =>
+            s.id === sourceId ? { ...result.source, status: "PROCESSING" } : s
+          )
+        );
+        toast.success(result.message);
+      } else {
+        throw new Error("Failed to add website");
+      }
+    } catch (error) {
+      // Update the source status to failed
+      setSources((prev) =>
+        prev.map((s) => (s.id === sourceId ? { ...s, status: "FAILED" } : s))
+      );
+      toast.error(
+        error instanceof Error ? error.message : "Failed to add website"
+      );
+      // Don't close modal on error - let user try again
+    } finally {
+      setIsAddingSource(false);
+    }
+  };
+
+  const handleAddYouTube = async () => {
+    if (!url.trim()) {
+      toast.error("Please enter a valid YouTube URL");
+      return;
+    }
+    if (!notebookId) {
+      toast.error("No notebook selected");
+      return;
+    }
+
+    setIsAddingSource(true);
+    const sourceId = `youtube-${Date.now()}`;
+    try {
+      // Create source with processing status first
+      const newSource: Source = {
+        id: sourceId,
+        sourceTitle: `YouTube: ${url}`,
+        type: "youtube",
+        url: url,
+        status: "UPLOADING",
+        createdAt: new Date(),
+      };
+
+      setSources((prev) => [...prev, newSource]);
+      setUrl("");
+      setModalOpen(false);
+
+      const response = await fetch(`/api/notebooks/${notebookId}/sources/url`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ youtubeUrl: url }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to add YouTube video");
+      }
+      const result = await response.json();
+      if (result.success) {
+        // Keep the source in processing status after API success
+        // The backend will handle the actual processing
+        setSources((prev) =>
+          prev.map((s) =>
+            s.id === sourceId ? { ...result.source, status: "PROCESSING" } : s
+          )
+        );
+        toast.success(result.message);
+      } else {
+        throw new Error("Failed to add YouTube video");
+      }
+    } catch (error) {
+      // Update the source status to failed
+      setSources((prev) =>
+        prev.map((s) => (s.id === sourceId ? { ...s, status: "FAILED" } : s))
+      );
+      toast.error(
+        error instanceof Error ? error.message : "Failed to add YouTube video"
+      );
+      // Don't close modal on error - let user try again
+    } finally {
+      setIsAddingSource(false);
+    }
+  };
+
+  const isYouTubeUrl = (url: string) => {
+    return url.includes("youtube.com") || url.includes("youtu.be");
+  };
+
+  const handleAddUrl = async () => {
+    if (!url.trim()) {
+      toast.error("Please enter a valid URL");
+      return;
+    }
+
+    setModalOpen(false);
+
+    if (isYouTubeUrl(url)) {
+      await handleAddYouTube();
+    } else {
+      await handleAddWebsite();
+    }
+  };
+
+  const handleAddCopiedText = async () => {
+    if (!copiedText.trim()) {
+      toast.error("Please enter some text");
+      return;
+    }
+
+    setIsAddingSource(true);
+    try {
+      // Simulate API call
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      const newSource: Source = {
+        id: `text-${Date.now()}`,
+        sourceTitle: `Text: ${copiedText.substring(0, 50)}${copiedText.length > 50 ? "..." : ""}`,
+        type: "text",
+        createdAt: new Date(),
+      };
+
+      setSources((prev) => [...prev, newSource]);
+      setCopiedText("");
+      toast.success("Text added successfully");
+      setModalOpen(false);
+    } catch (error) {
+      toast.error("Failed to add text");
+      // Don't close modal on error - let user try again
+    } finally {
+      setIsAddingSource(false);
+    }
+  };
+
+  const handleDeleteSource = async (sourceId: string) => {
+    if (!notebookId) {
+      toast.error("No notebook selected");
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `/api/notebooks/${notebookId}/sources?sourceId=${sourceId}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to delete source");
+      }
+
+      setSources((prev) => prev.filter((source) => source.id !== sourceId));
+      selectSources(selectedSources.filter((id) => id !== sourceId));
+      toast.success("Source deleted successfully");
+    } catch (error) {
+      console.error("Delete error:", error);
+      toast.error(
+        error instanceof Error ? error.message : "Failed to delete source"
+      );
+    }
+  };
+
+  const handleEditSourceName = async (sourceId: string) => {
+    if (!notebookId) {
+      toast.error("No notebook selected");
+      return;
+    }
+
+    const source = sources.find((s) => s.id === sourceId);
+    if (source) {
+      const newName = prompt("Enter new name:", source.sourceTitle);
+      if (newName && newName.trim()) {
+        try {
+          const response = await fetch(`/api/notebooks/${notebookId}/sources`, {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              sourceId: sourceId,
+              sourceTitle: newName.trim(),
+            }),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || "Failed to update source");
+          }
+
+          const result = await response.json();
+
+          setSources((prev) =>
+            prev.map((s) =>
+              s.id === sourceId
+                ? { ...s, sourceTitle: result.source.sourceTitle }
+                : s
+            )
+          );
+          toast.success("Source name updated");
+        } catch (error) {
+          console.error("Update error:", error);
+          toast.error(
+            error instanceof Error ? error.message : "Failed to update source"
+          );
+        }
+      }
+    }
+  };
+
+  const handleDiscoverSources = async () => {
+    setDiscoverModalOpen(true);
+    try {
+      // Simulate discovering sources
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      toast.success("Discovering sources...");
+    } catch (error) {
+      toast.error("Failed to discover sources");
+    }
+  };
+
+  const handleFeelingCurious = () => {
+    const curiousPrompts = [
+      "I'm interested in learning about artificial intelligence and machine learning",
+      "I want to explore the latest developments in renewable energy",
+      "I'm curious about space exploration and astronomy",
+      "I'd like to discover new productivity techniques and tools",
+      "I'm interested in understanding blockchain and cryptocurrency",
+      "I want to learn about sustainable living and environmental conservation",
+    ];
+    const randomPrompt =
+      curiousPrompts[Math.floor(Math.random() * curiousPrompts.length)];
+    setDiscoverInterest(randomPrompt);
+  };
+
+  const handleSubmitDiscover = async () => {
+    if (!discoverInterest.trim()) {
+      toast.error("Please enter what you're interested in");
+      return;
+    }
+
+    try {
+      // Simulate API call for discovering sources based on interest
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      toast.success("Discovering sources based on your interests...");
+      setDiscoverModalOpen(false);
+      setDiscoverInterest("");
+    } catch (error) {
+      toast.error("Failed to discover sources");
+    }
+  };
+
+  const handleSelectAllSources = (checked: boolean) => {
+    if (checked) {
+      selectSources(sources.map((s) => s.id));
+    } else {
+      selectSources([]);
+    }
+  };
+
+  const handleSelectSource = (sourceId: string, checked: boolean) => {
+    if (checked) {
+      selectSources([...selectedSources, sourceId]);
+    } else {
+      selectSources(selectedSources.filter((id) => id !== sourceId));
+    }
+  };
+
+  return (
+    <div className="h-full flex flex-col">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="font-medium text-sm text-foreground">
+              Sources <span>({sources.length}/5)</span>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>
+              You can only add 5 documents, To add more you need to go with
+              Infera Notebook Pro
+            </p>
+          </TooltipContent>
+        </Tooltip>
+
+        <div className="flex gap-2">
+          {/* Refetch button */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                className="rounded-md px-3 py-1.5 text-xs font-medium"
+                variant="outline"
+                onClick={() => refetch()}
+                disabled={isRefetching}
+              >
+                <RefreshCw
+                  className={`w-4 h-4 ${isRefetching ? "animate-spin" : ""}`}
+                />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Refresh sources</p>
+            </TooltipContent>
+          </Tooltip>
+          {/* Discover button */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                className="rounded-md px-3 py-1.5 text-xs font-medium"
+                variant="outline"
+                onClick={handleDiscoverSources}
+              >
+                <Search className="w-4 h-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Discover sources</p>
+            </TooltipContent>
+          </Tooltip>
+          {/* Dialog UI */}
+          <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DialogTrigger asChild>
+                  <Button
+                    className="rounded-md px-3 py-1.5 text-xs font-medium"
+                    variant="secondary"
+                  >
+                    <Plus />
+                  </Button>
+                </DialogTrigger>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Add sources</p>
+              </TooltipContent>
+            </Tooltip>
+            <DialogContent className="max-w-4xl">
+              <DialogHeader>
+                <DialogTitle>Add Sources</DialogTitle>
+                <DialogDescription>
+                  Sources let Infera Notebook base its responses on the
+                  information that matters most to you. (Examples: marketing
+                  plans, course reading, research notes, meeting transcripts,
+                  sales documents, etc.)
+                </DialogDescription>
+              </DialogHeader>
+              <Tabs defaultValue="upload" className="w-full">
+                <TabsList className="grid w-full grid-cols-3 mb-6">
+                  <TabsTrigger value="upload">Upload</TabsTrigger>
+                  <TabsTrigger value="link">Link</TabsTrigger>
+                  <TabsTrigger value="paste">Paste Text</TabsTrigger>
+                </TabsList>
+                <TabsContent value="upload">
+                  <div className="w-full max-w-4xl mx-auto min-h-48 border border-dashed bg-white dark:bg-black border-neutral-200 dark:border-neutral-800 rounded-lg p-6 flex flex-col gap-4 items-center justify-center">
+                    <p className="text-sm text-muted-foreground mb-2">
+                      Supported filetypes: PDF, .txt, Markdown, CSV, DOC, DOCX,
+                      MP3 Audio
+                    </p>
+                    <input
+                      type="file"
+                      multiple
+                      onChange={(e) => {
+                        const files = e.target.files;
+                        if (files) {
+                          handleFileUpload(Array.from(files));
+                        }
+                      }}
+                      disabled={isFileUploading}
+                    />
+                    {isFileUploading && (
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span className="text-sm">Uploading files...</span>
+                      </div>
+                    )}
+                  </div>
+                </TabsContent>
+                <TabsContent value="link">
+                  <div className="w-full max-w-2xl mx-auto min-h-32 bg-card border border-border rounded-lg p-6 flex flex-col gap-4 items-center justify-center">
+                    <h2 className="text-base font-medium mb-2">Add a Link</h2>
+                    <div className="flex flex-col gap-4 w-full">
+                      <div className="flex flex-col gap-2 w-full">
+                        <Label htmlFor="url-input">URL</Label>
+                        <div className="relative">
+                          <input
+                            id="url-input"
+                            type="url"
+                            className="w-full border rounded px-3 py-2 text-sm pr-20"
+                            placeholder="https://example.com or https://youtube.com/watch?v=..."
+                            value={url}
+                            onChange={(e) => setUrl(e.target.value)}
+                            disabled={isAddingSource}
+                          />
+                          {url.trim() && (
+                            <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+                              <span
+                                className={`text-xs px-2 py-1 rounded ${
+                                  isYouTubeUrl(url)
+                                    ? "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300"
+                                    : "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
+                                }`}
+                              >
+                                {isYouTubeUrl(url) ? "YouTube" : "Website"}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        <Button
+                          variant="outline"
+                          onClick={handleAddUrl}
+                          className="self-end mt-2"
+                          disabled={isAddingSource || !url.trim()}
+                        >
+                          {isAddingSource ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              Adding...
+                            </>
+                          ) : (
+                            `Add ${isYouTubeUrl(url) ? "YouTube" : "Website"}`
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </TabsContent>
+                <TabsContent value="paste">
+                  <div className="w-full max-w-2xl mx-auto min-h-32 bg-card border border-border rounded-lg p-6 flex flex-col gap-4 items-center justify-center">
+                    <h2 className="text-base font-medium mb-2">Paste Text</h2>
+                    <Label htmlFor="copied-text">Copied Text</Label>
+                    <Textarea
+                      id="copied-text"
+                      className="w-full"
+                      placeholder="Paste your text here..."
+                      value={copiedText}
+                      onChange={(e) => setCopiedText(e.target.value)}
+                      disabled={isAddingSource}
+                    />
+                    <Button
+                      variant="outline"
+                      onClick={handleAddCopiedText}
+                      className="self-end mt-2"
+                      disabled={isAddingSource || !copiedText.trim()}
+                    >
+                      {isAddingSource ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Adding...
+                        </>
+                      ) : (
+                        "Add Text"
+                      )}
+                    </Button>
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </div>
+      <div className="flex items-center px-4 py-2 border-b border-border">
+        <input
+          type="checkbox"
+          className="mr-2"
+          checked={
+            selectedSources.length === sources.length && sources.length > 0
+          }
+          onChange={(e) => handleSelectAllSources(e.target.checked)}
+        />
+        <Label
+          htmlFor="select-all-sources-lg"
+          className="text-xs text-zinc-400 select-none cursor-pointer"
+        >
+          Select all sources
+        </Label>
+      </div>
+      {/* Sources section takes remaining space */}
+      <div className="flex-1 min-h-0">
+        <ScrollArea className="h-full w-full">
+          <div className="px-2 py-2">
+            {/* Loading state */}
+            {isPending && (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                <span className="ml-2 text-sm text-muted-foreground">
+                  Loading sources...
+                </span>
+              </div>
+            )}
+
+            {/* Error state */}
+            {error && (
+              <div className="flex items-center justify-center py-8 text-red-600">
+                <span className="text-sm">
+                  Failed to load sources. Please try again.
+                </span>
+              </div>
+            )}
+
+            {/* File uploading UI placeholder */}
+            {isFileUploading && (
+              <div className="flex items-center bg-card rounded-md px-2 py-2 mb-2">
+                <Button variant="ghost" size="icon" className="mr-2">
+                  <FileText className="w-4 h-4 text-muted-foreground" />
+                </Button>
+                <span className="flex-1 text-sm text-foreground">
+                  Uploading files...
+                </span>
+                <Button variant="ghost" size="icon" className="mr-2">
+                  <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" />
+                </Button>
+              </div>
+            )}
+            {/* Sources list */}
+            {!isPending &&
+              !error &&
+              sources.map((source) => (
+                <div
+                  key={source.id}
+                  className="flex items-center bg-card rounded-md px-2 py-2 mb-2"
+                >
+                  <Button variant="ghost" size="icon" className="mr-2">
+                    <FileText className="w-4 h-4 text-muted-foreground" />
+                  </Button>
+                  <span className="flex-1 text-sm text-foreground">
+                    {source.sourceTitle}
+                  </span>
+                  {source.status === "UPLOADING" ? (
+                    <span className="ml-2 text-xs text-blue-600 font-semibold">
+                      UPLOADING
+                    </span>
+                  ) : source.status === "PROCESSING" ? (
+                    <span className="ml-2 text-xs text-yellow-600 font-semibold">
+                      PROCESSING
+                    </span>
+                  ) : source.status === "FAILED" ? (
+                    <span className="ml-2 text-xs text-red-600 font-semibold">
+                      FAILED
+                    </span>
+                  ) : (
+                    <>
+                      <input
+                        type="checkbox"
+                        className="ml-2"
+                        checked={selectedSources.includes(source.id)}
+                        onChange={(e) =>
+                          handleSelectSource(source.id, e.target.checked)
+                        }
+                      />
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="ml-2">
+                            <MoreVertical className="w-4 h-4 text-muted-foreground" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => handleEditSourceName(source.id)}
+                          >
+                            Edit Source Name
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleDeleteSource(source.id)}
+                            className="text-destructive"
+                          >
+                            Delete Source
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </>
+                  )}
+                </div>
+              ))}
+            {!isPending &&
+              !error &&
+              sources.length === 0 &&
+              !isFileUploading && (
+                <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                  <FileText className="w-8 h-8 mb-2" />
+                  <p className="text-sm">No sources added yet</p>
+                  <p className="text-xs">
+                    Add your first source to get started
+                  </p>
+                </div>
+              )}
+          </div>
+        </ScrollArea>
+      </div>
+
+      {/* Discover Sources Dialog */}
+      <Dialog open={discoverModalOpen} onOpenChange={setDiscoverModalOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Discover Sources</DialogTitle>
+            <DialogDescription>
+              Find and add relevant sources from your connected accounts and
+              recent activity.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-3">
+              <Label
+                htmlFor="discover-interest"
+                className="text-base font-medium"
+              >
+                What are you interested in?
+              </Label>
+              <Textarea
+                id="discover-interest"
+                placeholder="Tell us what you're looking for... (e.g., machine learning, productivity tips, space exploration)"
+                value={discoverInterest}
+                onChange={(e) => setDiscoverInterest(e.target.value)}
+                className="min-h-[120px] resize-none"
+              />
+            </div>
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                onClick={handleFeelingCurious}
+                className="flex items-center gap-2"
+              >
+                <Sparkles className="w-4 h-4" />I am feeling Curious
+              </Button>
+              <Button
+                onClick={handleSubmitDiscover}
+                disabled={!discoverInterest.trim()}
+                className="flex-1"
+              >
+                Submit
+              </Button>
+            </div>
+            <div className="border-t pt-4">
+              <h3 className="font-medium mb-3">
+                Or connect external services:
+              </h3>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between p-4 border rounded-lg">
+                  <div>
+                    <h3 className="font-medium">Recent Documents</h3>
+                    <p className="text-sm text-muted-foreground">
+                      From your recent activity
+                    </p>
+                  </div>
+                  <Button variant="outline" size="sm">
+                    Browse
+                  </Button>
+                </div>
+                <div className="flex items-center justify-between p-4 border rounded-lg">
+                  <div>
+                    <h3 className="font-medium">Google Drive</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Connect your Google Drive
+                    </p>
+                  </div>
+                  <Button variant="outline" size="sm">
+                    Connect
+                  </Button>
+                </div>
+                <div className="flex items-center justify-between p-4 border rounded-lg">
+                  <div>
+                    <h3 className="font-medium">OneDrive</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Connect your OneDrive
+                    </p>
+                  </div>
+                  <Button variant="outline" size="sm">
+                    Connect
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+export default SourceUI;

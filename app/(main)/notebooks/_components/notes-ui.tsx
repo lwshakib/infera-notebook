@@ -70,7 +70,7 @@ export const NotesUI = ({ notebookId }: NotesUIProps) => {
       return res.json();
     },
     enabled: !!notebookId,
-    refetchInterval: 10000
+    refetchInterval: 10000,
   });
 
   const { data, isLoading, error } = useQuery({

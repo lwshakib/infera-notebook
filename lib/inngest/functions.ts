@@ -518,3 +518,105 @@ export const deleteSourceVectorData = inngest.createFunction(
     };
   }
 );
+
+export const processTextContent = inngest.createFunction(
+  { id: "process-text-content" },
+  { event: "notebook/process-text-content" },
+  async ({ event, step }) => {
+    const { sourceId, notebookId, userId, textContent } = event.data;
+
+    // Log the text content
+    console.log("Processing text content for source:", sourceId);
+    console.log("Text content:", textContent);
+
+    // Step 1: Generate title using AI
+    const title = await step.run("generate-title", async () => {
+      const ai = new GoogleGenAI({ apiKey: googleApiKey });
+      const titleRes = await ai.models.generateContent({
+        model: "gemini-1.5-flash",
+        contents: `Create a compelling and succinct title that captures the essence of this text content. The title should be descriptive, professional, and under 60 characters. Respond with only the title as plain text. Do not include any explanations, quotes, or formatting.
+
+Text content: ${textContent.substring(0, 1000)}${textContent.length > 1000 ? "..." : ""}`,
+      });
+      return titleRes.text?.trim() || "Text Document";
+    });
+
+    // Step 2: Prepare text chunks for vector store
+    const textChunks = await step.run("prepare-text-chunks", async () => {
+      const textSplitter = new RecursiveCharacterTextSplitter({
+        chunkSize: 1000,
+        chunkOverlap: 50,
+      });
+
+      // Create a simple document structure
+      const docs = [
+        {
+          pageContent: textContent,
+          metadata: {
+            sourceId: sourceId,
+            userId: userId,
+            notebookId: notebookId,
+            type: "text",
+          },
+        },
+      ];
+
+      // Split the text into chunks
+      const texts = await textSplitter.splitDocuments(docs as any);
+
+      // Add metadata to each chunk
+      const textsWithMetadata = texts.map((doc) => ({
+        ...doc,
+        metadata: {
+          ...doc.metadata,
+          sourceId: sourceId,
+          userId: userId,
+          notebookId: notebookId,
+        },
+      }));
+
+      return textsWithMetadata;
+    });
+
+    // Step 3: Add documents to vector store
+    const vectorStoreResult = await step.run(
+      "add-to-vector-store",
+      async () => {
+        const vectorStore = await QdrantVectorStore.fromExistingCollection(
+          embeddings,
+          {
+            url: process.env.QDRANT_URL,
+            collectionName: "infera-notebooks-chunks",
+            apiKey: process.env.QDRANT_API_KEY,
+          }
+        );
+
+        // Add documents to vector store
+        await vectorStore.addDocuments(textChunks);
+
+        return {
+          chunksAdded: textChunks.length,
+          sourceId: sourceId,
+        };
+      }
+    );
+
+    // Step 4: Update source in database
+    const updatedSource = await step.run("update-source-status", async () => {
+      return await prisma.source.update({
+        where: { id: sourceId },
+        data: {
+          status: "COMPLETED",
+          sourceTitle: title,
+        },
+      });
+    });
+
+    return {
+      success: true,
+      source: updatedSource,
+      vectorStoreResult,
+      title,
+    };
+  }
+);

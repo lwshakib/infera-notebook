@@ -171,3 +171,81 @@ export async function PUT(
     );
   }
 }
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const user = await currentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const notebookId = (await params).id;
+    const { textContent } = await request.json();
+
+    if (
+      !textContent ||
+      typeof textContent !== "string" ||
+      textContent.trim().length === 0
+    ) {
+      return NextResponse.json(
+        { error: "Text content is required" },
+        { status: 400 }
+      );
+    }
+
+    // Verify notebook exists and belongs to user
+    const notebook = await prisma.notebook.findFirst({
+      where: {
+        id: notebookId,
+        clerkId: user.id,
+      },
+    });
+
+    if (!notebook) {
+      return NextResponse.json(
+        { error: "Notebook not found" },
+        { status: 404 }
+      );
+    }
+
+    // Log the text content
+    console.log("Received text content:", textContent);
+
+    // Create a new source for the text content
+    const newSource = await prisma.source.create({
+      data: {
+        sourceTitle: `Text: ${textContent.substring(0, 50)}${textContent.length > 50 ? "..." : ""}`,
+        type: "text",
+        url: `text://${Date.now()}`, // Use a pseudo URL for text content
+        notebookId: notebookId,
+        status: "PROCESSING",
+      },
+    });
+
+    // Trigger Inngest function to process text content
+    await inngest.send({
+      name: "notebook/process-text-content",
+      data: {
+        sourceId: newSource.id,
+        notebookId: notebookId,
+        userId: user.id,
+        textContent: textContent,
+      },
+    });
+
+    return NextResponse.json({
+      success: true,
+      source: newSource,
+      message: "Text content added successfully",
+    });
+  } catch (error) {
+    console.error("Error adding text content:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}

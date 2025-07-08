@@ -8,6 +8,7 @@ import {
   createSourceFromYoutubeUrl,
   deleteSourceVectorData,
   processFiles,
+  processTextContent,
 } from "@/lib/inngest/functions";
 
 // Create an API that serves all functions except helloWorld
@@ -20,5 +21,6 @@ export const { GET, POST, PUT } = serve({
     createSourceFromYoutubeUrl,
     createSourceFromWebsiteUrl,
     deleteSourceVectorData,
+    processTextContent
   ],
 });

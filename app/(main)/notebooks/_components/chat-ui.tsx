@@ -165,7 +165,7 @@ const ChatUI = () => {
       const res = await fetch(`/api/notebooks/${params.id}/notes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ note }),
+        body: JSON.stringify({ note, type: 'NOTE' }),
       });
 
       if (!res.ok) {

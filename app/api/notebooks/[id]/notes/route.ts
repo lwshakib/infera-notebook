@@ -15,6 +15,8 @@ export async function POST(
     const notebookId = (await params).id;
     const body = await req.json();
     const noteInput = body.note;
+    const noteType = body.type || "NOTE";
+
     if (!noteInput || typeof noteInput !== "string" || !noteInput.trim()) {
       return NextResponse.json(
         { error: "Note content is required" },
@@ -22,15 +24,29 @@ export async function POST(
       );
     }
 
-    // Trigger Inngest function to process and save the note
-    await inngest.send({
-      name: "notebook/create-note",
-      data: {
-        notebookId,
-        userId: user.id,
-        note: noteInput,
-      },
-    });
+
+    // Route to appropriate Inngest function based on type
+    if (noteType === "MIND_MAP") {
+      await inngest.send({
+        name: "notebook/create-mindmap",
+        data: {
+          notebookId,
+          userId: user.id,
+          note: noteInput,
+          selectedSources: body.selectedSources,
+        },
+      });
+    } else {
+      // Trigger Inngest function to process and save the note
+      await inngest.send({
+        name: "notebook/create-note",
+        data: {
+          notebookId,
+          userId: user.id,
+          note: noteInput,
+        },
+      });
+    }
 
     return NextResponse.json({ success: true });
   } catch (err) {

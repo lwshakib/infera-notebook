@@ -48,6 +48,7 @@ model Notebook {
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
   audioOverview Json?
+  questions   String[]
   user        User           @relation("UserNotebooks", fields: [clerkId], references: [clerkId], onDelete: Cascade)
   sources     Source[]
   notes       Note[]
@@ -83,12 +84,20 @@ model ChatMessage {
 }
 
 
+enum NOTE_TYPE{
+  NOTE
+  MIND_MAP
+}
+
+
+
 model Note {
   id          String       @id @default(cuid())
   title       String?
   content     String?
   notebookId  String
   status      NOTE_STATUS  @default(PROCESSING)
+  type        NOTE_TYPE    @default(NOTE)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 

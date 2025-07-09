@@ -4,6 +4,7 @@ import { GoogleGenAI } from "@google/genai";
 import { TaskType } from "@google/generative-ai";
 import { CSVLoader } from "@langchain/community/document_loaders/fs/csv";
 import { DocxLoader } from "@langchain/community/document_loaders/fs/docx";
+import { CheerioWebBaseLoader } from "@langchain/community/document_loaders/web/cheerio";
 import { WebPDFLoader } from "@langchain/community/document_loaders/web/pdf";
 import { YoutubeLoader } from "@langchain/community/document_loaders/web/youtube";
 import { GoogleGenerativeAIEmbeddings } from "@langchain/google-genai";
@@ -15,7 +16,7 @@ import { googleApiKey } from "../config";
 import { prisma } from "../prisma";
 import { inngest } from "./client";
 // @ts-ignore
-
+const ai = new GoogleGenAI({ apiKey: googleApiKey });
 const embeddings = new GoogleGenerativeAIEmbeddings({
   model: "text-embedding-004", // 768 dimensions
   taskType: TaskType.RETRIEVAL_DOCUMENT,
@@ -147,7 +148,7 @@ export const createSourceFromYoutubeUrl = inngest.createFunction(
     const docs = await loader.load();
     const textSplitter = new RecursiveCharacterTextSplitter({
       chunkSize: 1000,
-      chunkOverlap: 50,
+      chunkOverlap: 100,
     });
     const texts = await textSplitter.splitDocuments(docs as any);
 
@@ -185,14 +186,36 @@ export const createSourceFromWebsiteUrl = inngest.createFunction(
       }
     );
 
-    const updatedSource = await prisma.source.update({
-      where: { id: sourceId },
-      data: {
-        status: "COMPLETED",
-        sourceTitle: `Website: ${new URL(websiteUrl).hostname}`,
-      },
+    const loader = new CheerioWebBaseLoader(websiteUrl, {});
+    const docs = await loader.load();
+    const textSplitter = new RecursiveCharacterTextSplitter({
+      chunkSize: 1000,
+      chunkOverlap: 100,
     });
-    return updatedSource;
+    const texts = await textSplitter.splitDocuments(docs as any);
+    const textsWithMetadata = texts.map((doc) => ({
+      ...doc,
+      metadata: {
+        ...doc.metadata,
+        sourceId: sourceId,
+        userId: userId,
+        notebookId: notebookId, // Added notebookId to metadata
+      },
+    }));
+    await vectorStore.addDocuments(textsWithMetadata);
+    const updateDB = await step.run("UpdateDB", async () => {
+      const updatedSource = await prisma.source.update({
+        where: { id: sourceId },
+        data: {
+          status: "COMPLETED",
+          sourceTitle:
+            docs[0].metadata.title ||
+            `Website: ${new URL(websiteUrl).hostname}`,
+        },
+      });
+      return updatedSource;
+    });
+    return updateDB;
   }
 );
 
@@ -438,9 +461,8 @@ export const createNote = inngest.createFunction(
 
     // Step 2: Generate a nice title using GoogleGenAI
     const title = await step.run("generate-title", async () => {
-      const ai = new GoogleGenAI({ apiKey: googleApiKey });
       const titleRes = await ai.models.generateContent({
-        model: "gemini-1.5-flash",
+        model: "gemini-2.5-flash",
         contents: `Create a compelling and succinct title that captures the essence of this note: ${note}. Respond with only the title as plain text. Do not include any explanations or formatting.
 `,
       });
@@ -449,9 +471,8 @@ export const createNote = inngest.createFunction(
 
     // Step 3: Generate a detailed note using GoogleGenAI
     const content = await step.run("generate-content", async () => {
-      const ai = new GoogleGenAI({ apiKey: googleApiKey });
       const detailRes = await ai.models.generateContent({
-        model: "gemini-1.5-flash",
+        model: "gemini-2.5-flash",
         contents: `Transform the following brief note, based on the prompt below, into a detailed and well-structured explanation.  
 Format the output using **Markdown** for clear and professional presentation.  
 Return **only** the formatted content—no additional commentary or explanations.  
@@ -618,5 +639,213 @@ Text content: ${textContent.substring(0, 1000)}${textContent.length > 1000 ? "..
       vectorStoreResult,
       title,
     };
+  }
+);
+
+export const createMindMap = inngest.createFunction(
+  { id: "notebook/create-mindmap" },
+  { event: "notebook/create-mindmap" },
+  async ({ event, step }) => {
+    const { selectedSources, notebookId, userId, note } = event?.data;
+
+    // Step 1: Create initial note record
+    const saveItOnNote = await step.run("create-note-record", async () => {
+      return await prisma.note.create({
+        data: {
+          notebookId: notebookId,
+          type: "MIND_MAP",
+        },
+      });
+    });
+
+    // Step 2: Connect to vector store and fetch chunks
+    const vectorStoreData = await step.run(
+      "fetch-vector-store-data",
+      async () => {
+        // Connect to the vector store
+        const vectorStore = await QdrantVectorStore.fromExistingCollection(
+          embeddings,
+          {
+            url: process.env.QDRANT_URL,
+            collectionName: "infera-notebooks-chunks",
+            apiKey: process.env.QDRANT_API_KEY,
+          }
+        );
+
+        // Build filter for selected source IDs
+        const filter = {
+          must: [{ key: "metadata.sourceId", match: { any: selectedSources } }],
+        };
+
+        // Fetch all chunks for the selected sources
+        const allChunks = await vectorStore.similaritySearch("", 1000, filter);
+        const allTexts = allChunks.map((doc: any) => doc.pageContent);
+
+        return {
+          allTexts,
+          chunksCount: allChunks.length,
+        };
+      }
+    );
+
+    // Step 3: Process and limit text content
+    const processedTexts = await step.run("process-text-content", async () => {
+      const { allTexts } = vectorStoreData;
+
+      // Limit to 2000 words total
+      let wordCount = 0;
+      const limitedTexts: string[] = [];
+      for (const text of allTexts) {
+        const words = text.split(/\s+/);
+        if (wordCount + words.length > 2000) {
+          // Add only the remaining words to reach 2000
+          const remaining = 2000 - wordCount;
+          if (remaining > 0) {
+            limitedTexts.push(words.slice(0, remaining).join(" "));
+          }
+          break;
+        } else {
+          limitedTexts.push(text);
+          wordCount += words.length;
+        }
+      }
+
+      return {
+        limitedTexts,
+        wordCount,
+        totalTexts: allTexts.length,
+      };
+    });
+
+    // Step 4: Generate concise summary of the content
+    const contentSummary = await step.run(
+      "generate-content-summary",
+      async () => {
+        const { limitedTexts } = processedTexts;
+
+        const summaryPrompt = `Create a concise, well-structured summary of the following content. Focus on the main topics, key concepts, and important relationships between ideas. Keep the summary clear and organized for mind map generation.
+
+Content: ${limitedTexts.join("\n\n")}`;
+
+        const summaryResponse = await ai.models.generateContent({
+          model: "gemini-2.5-flash",
+          contents: summaryPrompt,
+        });
+
+        return summaryResponse.text?.trim() || limitedTexts.join("\n\n");
+      }
+    );
+
+    // Step 5: Generate mind map using AI
+    const mindmapProcessing = await step.run("generate-mindmap", async () => {
+      const mindmapprompt = `
+      You are an expert system for generating visual mind maps for educational content.
+      
+      🧠 Task:
+      Generate a structured Mind Map in plain JSON format based on a user-defined topic and its learning roadmap. This map must be hierarchical, logically organized, and visually intuitive, following strict formatting.
+      
+      ---
+      
+      🔧 Mind Map Structure:
+      - Root node = main topic (placed at top center, y = 0).
+      - First-level nodes = key milestones or sections (horizontal, y = 180).
+      - Second-level nodes = subtopics/concepts (under first-level, y = 400).
+      - Third-level nodes (optional) = specific tools, APIs, or advanced concepts (y = 650).
+      
+      ---
+      
+      🧩 Node Format:
+      Each node includes:
+      - \`id\`: unique string (e.g., "intro", "coremodules").
+      - \`position\`: x/y coordinates to visually organize the layout.
+      - \`data\`: label as a string to display inside the node.
+      
+      Example:
+      {
+        id: "basics",
+        position: { x: 500, y: 180 },
+        data: { label: "Basics" }
+      }
+      
+      ---
+      
+      🔗 Edge Format:
+      Each edge connects a parent node to a child node.
+      Format:
+      {
+        id: "e-source-target",
+        source: "source-id",
+        target: "target-id"
+      }
+      
+      ---
+      
+      🖥 Output Format:
+      Respond with ONLY the following structure — **plain JSON**, no markdown, no backticks, no code fences:
+      
+      {
+        initialNodes: [
+          // all nodes here
+        ],
+        initialEdges: [
+          // all edges here
+        ]
+      }
+      
+      ---
+      
+      📌 Constraints:
+      - DO NOT return any markdown or explanation — just the JSON.
+      - Node IDs must be unique and meaningful.
+      - Layout spacing should ensure readability and avoid overlap.
+      - No style attributes should be included in any node.
+      
+      ---
+      
+      📥 Input Topic:
+      "Node.js Roadmap"
+      
+      🎯 Your Output:
+      A complete mind map in JSON format (as defined), representing the topic above with properly structured nodes and edges.
+      `;
+
+      const generateMindmap = await ai.models.generateContent({
+        model: "gemini-1.5-flash",
+        contents: contentSummary,
+        config: {
+          systemInstruction: mindmapprompt,
+        },
+      });
+
+      return generateMindmap.text
+        ?.replace(/```[\w]*\n([\s\S]*?)```/g, "$1")
+        .trim();
+    });
+
+    // Step 5: Generate title for the mind map
+    const title = await step.run("generate-title", async () => {
+      const titleRes = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: `Create a compelling and succinct title that captures the essence of this mindmap: ${mindmapProcessing}. Respond with only the title as plain text. Do not include any explanations or formatting.
+`,
+      });
+      return titleRes.text?.trim() || "Untitled Mind Map";
+    });
+
+    // Step 6: Update the note with title, content, and status
+    const updateNote = await step.run("update-note-record", async () => {
+      return await prisma.note.update({
+        where: {
+          id: saveItOnNote.id,
+        },
+        data: {
+          title,
+          content: mindmapProcessing,
+          status: "COMPLETED",
+        },
+      });
+    });
+
+    return updateNote;
   }
 );

@@ -204,11 +204,14 @@ export function SourceUI({ notebookId }: SourceUIProps) {
       setUrl("");
       setModalOpen(false);
 
-      const response = await fetch(`/api/notebooks/${notebookId}/sources/url`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ websiteUrl: url }),
-      });
+      const response = await fetch(
+        `/api/notebooks/${notebookId}/sources/website`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ websiteUrl: url }),
+        }
+      );
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || "Failed to add website");
@@ -267,11 +270,14 @@ export function SourceUI({ notebookId }: SourceUIProps) {
       setUrl("");
       setModalOpen(false);
 
-      const response = await fetch(`/api/notebooks/${notebookId}/sources/url`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ youtubeUrl: url }),
-      });
+      const response = await fetch(
+        `/api/notebooks/${notebookId}/sources/youtube`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ youtubeUrl: url }),
+        }
+      );
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || "Failed to add YouTube video");

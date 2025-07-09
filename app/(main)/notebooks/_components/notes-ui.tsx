@@ -35,6 +35,7 @@ import {
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { AudioPlayer } from "./audio-player";
+import MindMap from "./mindmap";
 
 export interface Note {
   id: string;
@@ -43,6 +44,7 @@ export interface Note {
   createdAt: string;
   updatedAt: string;
   status?: string; // <-- add status from backend
+  type?: string; // <-- add type for mind map
 }
 
 interface NotesUIProps {
@@ -57,8 +59,15 @@ export const NotesUI = ({ notebookId }: NotesUIProps) => {
   );
   const [creatingAudio, setCreatingAudio] = useState(false);
   const [showDummyProcessing, setShowDummyProcessing] = useState(false);
+  const [creatingMindMap, setCreatingMindMap] = useState(false);
   const queryClient = useQueryClient();
-  const { notes: storeNotes, setNotes, selectedSources } = useNotebookStore();
+  const {
+    notes: storeNotes,
+    setNotes,
+    selectedSources,
+    addProcessingNote,
+    removeProcessingNote,
+  } = useNotebookStore();
 
   // Fetch notebook details (including audioOverView)
   const { data: notebookData, isLoading: notebookLoading } = useQuery({
@@ -206,6 +215,48 @@ export const NotesUI = ({ notebookId }: NotesUIProps) => {
     }
   };
 
+  const handleCreateMindMap = async () => {
+    if (!notebookId || selectedSources.length === 0) return;
+
+    setCreatingMindMap(true);
+
+    // Create a temporary processing note for mind map
+    const processingNoteId = `processing-mindmap-${Date.now()}`;
+    const processingNote = {
+      id: processingNoteId,
+      title: "Creating Mind Map...",
+      content: `Creating a mind map from the following sources: ${selectedSources.map((source) => source.title || source.url).join(", ")}`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      status: "PROCESSING",
+    };
+
+    // Add the processing note to the store
+    addProcessingNote(processingNote);
+
+    try {
+      await fetch(`/api/notebooks/${notebookId}/notes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          note: `Create a mind map from the following sources: ${selectedSources.map((source) => source.title || source.url).join(", ")}`,
+          type: "MIND_MAP",
+          selectedSources,
+        }),
+      });
+      console.log("Mind map creation initiated");
+
+      // Invalidate and refetch notes to get the real note from the backend
+      await queryClient.invalidateQueries({ queryKey: ["notes", notebookId] });
+    } catch (err) {
+      console.error("Failed to create mind map", err);
+      // Remove the processing note if the API request failed
+      removeProcessingNote(processingNoteId);
+    } finally {
+      setCreatingMindMap(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full w-full">
       {/* Audio Overview Section */}
@@ -254,6 +305,37 @@ export const NotesUI = ({ notebookId }: NotesUIProps) => {
             Select source to create Audio Overview
           </div>
         )}
+      </div>
+
+      <div className="mb-4">
+        <Button
+          onClick={handleCreateMindMap}
+          disabled={selectedSources.length === 0 || creatingMindMap}
+        >
+          {creatingMindMap ? (
+            <>
+              <svg className="animate-spin h-4 w-4 mr-2" viewBox="0 0 24 24">
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                  fill="none"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                />
+              </svg>
+              Creating Mind Map...
+            </>
+          ) : (
+            "Create A Mind Map"
+          )}
+        </Button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-2">
@@ -395,21 +477,29 @@ export const NotesUI = ({ notebookId }: NotesUIProps) => {
 
       {/* Note Details Dialog */}
       <Dialog open={openNote !== null} onOpenChange={() => setOpenNote(null)}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden">
-          {(() => {
-            const note = notes.find((n) => n.id === openNote);
-            if (!note) return null;
+        {(() => {
+          const note = notes.find((n) => n.id === openNote);
+          if (!note) return null;
 
-            const status = getNoteStatus(note);
-            const isRecent =
-              new Date(note.createdAt) >
-              new Date(Date.now() - 24 * 60 * 60 * 1000);
+          const status = getNoteStatus(note);
+          const isRecent =
+            new Date(note.createdAt) >
+            new Date(Date.now() - 24 * 60 * 60 * 1000);
 
+          // Special modal for MIND_MAP
+          if (note.type === "MIND_MAP") {
             return (
-              <>
+              <DialogContent
+                style={{
+                  width: "90vw",
+                  height: "90vh",
+                  maxWidth: "90vw",
+                  maxHeight: "90vh",
+                }}
+              >
                 <DialogHeader>
                   <DialogTitle className="flex items-center gap-2">
-                    <span>{note.title || "Untitled Note"}</span>
+                    <span>{note.title || "Mind Map"}</span>
                     {isRecent && (
                       <Badge variant="secondary" className="text-xs">
                         <Sparkles className="w-3 h-3" />
@@ -431,23 +521,75 @@ export const NotesUI = ({ notebookId }: NotesUIProps) => {
                     {getStatusBadge(status)}
                   </DialogDescription>
                 </DialogHeader>
-                <div className="mt-6 flex-1 overflow-hidden">
+                <div
+                  className="mt-6 flex-1 overflow-auto"
+                  style={{ height: "70vh" }}
+                >
                   <div className="text-sm text-muted-foreground mb-2 flex items-center gap-2">
                     <FileText className="w-4 h-4" />
-                    Content:
+                    Mind Map Content:
                   </div>
-                  <ScrollArea className="h-full max-h-[50vh]">
-                    <div className="text-foreground whitespace-pre-wrap bg-muted p-4 rounded-md border">
-                      <ReactMarkdown>
-                        {note.content || "No content available"}
-                      </ReactMarkdown>
+                  <ScrollArea className="h-full max-h-[60vh]">
+                    <div
+                      className="text-foreground whitespace-pre-wrap bg-muted p-4 rounded-md border"
+                      style={{ minHeight: "50vh" }}
+                    >
+                      {note && note.content && (
+                        <MindMap
+                          initialNodes={JSON.parse(note.content).initialNodes}
+                          initialEdges={JSON.parse(note.content).initialEdges}
+                        />
+                      )}
                     </div>
                   </ScrollArea>
                 </div>
-              </>
+              </DialogContent>
             );
-          })()}
-        </DialogContent>
+          }
+
+          // Default dialog for other note types
+          return (
+            <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <span>{note.title || "Untitled Note"}</span>
+                  {isRecent && (
+                    <Badge variant="secondary" className="text-xs">
+                      <Sparkles className="w-3 h-3" />
+                      New
+                    </Badge>
+                  )}
+                </DialogTitle>
+                <DialogDescription className="flex items-center gap-2 text-sm">
+                  <Badge variant="outline" className="text-xs">
+                    <Calendar className="w-3 h-3" />
+                    {formatDistanceToNow(new Date(note.createdAt), {
+                      addSuffix: true,
+                    })}
+                  </Badge>
+                  <Badge variant="outline" className="text-xs">
+                    <Clock className="w-3 h-3" />
+                    {new Date(note.createdAt).toLocaleTimeString()}
+                  </Badge>
+                  {getStatusBadge(status)}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="mt-6 flex-1 overflow-hidden">
+                <div className="text-sm text-muted-foreground mb-2 flex items-center gap-2">
+                  <FileText className="w-4 h-4" />
+                  Content:
+                </div>
+                <ScrollArea className="h-full max-h-[50vh]">
+                  <div className="text-foreground whitespace-pre-wrap bg-muted p-4 rounded-md border">
+                    <ReactMarkdown>
+                      {note.content || "No content available"}
+                    </ReactMarkdown>
+                  </div>
+                </ScrollArea>
+              </div>
+            </DialogContent>
+          );
+        })()}
       </Dialog>
     </div>
   );

@@ -1,0 +1,5 @@
+-- CreateEnum
+CREATE TYPE "NOTE_TYPE" AS ENUM ('NOTE', 'MIND_MAP');
+
+-- AlterTable
+ALTER TABLE "Note" ADD COLUMN     "type" "NOTE_TYPE" NOT NULL DEFAULT 'NOTE';

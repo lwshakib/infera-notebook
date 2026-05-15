@@ -1,0 +1,47 @@
+import { NextResponse } from 'next/server';
+import { GoogleGenAI } from '@google/genai';
+import { GOOGLE_API_KEY } from '@/lib/llm/config';
+import { CHAT_MODEL_ID } from '@/lib/constants';
+
+export async function POST(req: Request) {
+  const google = new GoogleGenAI({ apiKey: GOOGLE_API_KEY });
+  try {
+    const formData = await req.formData();
+    const audioFile = formData.get('audio') as File;
+
+    if (!audioFile) {
+      return NextResponse.json({ error: 'Audio file is required' }, { status: 400 });
+    }
+
+    // Convert File to Base64 for Gemini
+    const arrayBuffer = await audioFile.arrayBuffer();
+    const base64Audio = Buffer.from(arrayBuffer).toString('base64');
+
+    const response = await google.models.generateContent({
+      model: CHAT_MODEL_ID,
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            {
+              inlineData: {
+                data: base64Audio,
+                mimeType: audioFile.type || 'audio/webm', // MediaRecorder default is usually webm
+              },
+            },
+            {
+              text: 'Transcribe this audio exactly as spoken. Return only the transcript text without any preamble or conversational fillers.',
+            },
+          ],
+        },
+      ],
+    });
+
+    const transcript = response.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+    return NextResponse.json({ transcript });
+  } catch (error) {
+    console.error('[TRANSCRIBE_API_ERROR]', error);
+    return NextResponse.json({ error: 'Failed to transcribe audio' }, { status: 500 });
+  }
+}

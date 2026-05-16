@@ -264,3 +264,54 @@ export const createNote = inngest.createFunction(
     }
   }
 );
+
+export const deleteNote = inngest.createFunction(
+  {
+    id: 'delete-note',
+    name: 'Delete Note',
+    description: 'Handles the deletion of a note and its associated assets',
+    retries: 0,
+  },
+  { event: 'note/delete-requested' },
+  async ({ event, step }) => {
+    const { noteId, notebookId, userId, noteContent, noteType } = event.data as {
+      noteId: string;
+      notebookId: string;
+      userId: string;
+      noteContent?: string;
+      noteType?: AllowedNoteType;
+    };
+
+    // Step 1: Asset Cleanup
+    await step.run('cleanup-assets', async () => {
+      if (!noteContent) return;
+      try {
+        const parsed = JSON.parse(noteContent);
+        const paths: string[] = [];
+        if (noteType === AllowedNoteType.INFOGRAPHIC && parsed.path) paths.push(parsed.path);
+        if (noteType === AllowedNoteType.SLIDE_DECK && Array.isArray(parsed)) {
+          parsed.forEach((s: any) => s.path && paths.push(s.path));
+        }
+        if (noteType === AllowedNoteType.AUDIO_OVERVIEW && parsed.path) paths.push(parsed.path);
+        if (noteType === AllowedNoteType.VIDEO_OVERVIEW) {
+          if (parsed.path) paths.push(parsed.path);
+          if (Array.isArray(parsed.images)) {
+            parsed.images.forEach((img: any) => img.path && paths.push(img.path));
+          }
+        }
+        await Promise.allSettled(paths.map((p) => deleteFile(p)));
+      } catch (e) {
+        console.error(`[DELETE_NOTE_WORKFLOW] Failed to clean up assets for note ${noteId}:`, e);
+      }
+    });
+
+    // Step 2: Delete DB record
+    await step.run('delete-db-record', async () => {
+      await prisma.note.delete({
+        where: { id: noteId },
+      });
+    });
+
+    return { success: true };
+  }
+);

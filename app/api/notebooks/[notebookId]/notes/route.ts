@@ -262,12 +262,15 @@ export async function DELETE(
         select: { id: true, type: true, content: true },
       });
 
-      await prisma.note.deleteMany({
+      await prisma.note.updateMany({
         where: {
           notebookId,
           notebook: {
             userId: user.id,
           },
+        },
+        data: {
+          status: Status.DELETING,
         },
       });
 
@@ -320,9 +323,12 @@ export async function DELETE(
     });
 
     if (!note) {
-      return NextResponse.json({ error: 'Note not found' }, { status: 404 });
-    }
-
+      await prisma.note.update({
+        where: { id: noteId },
+        data: {
+          status: Status.DELETING,
+        },
+      });
     await prisma.note.delete({
       where: { id: noteId },
     });

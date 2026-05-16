@@ -51,14 +51,17 @@ export async function deductCredit(userId: string) {
     return false;
   }
 
-  await prisma.user.update({
-    where: { id: userId },
+  const result = await prisma.user.updateMany({
+    where: {
+      id: userId,
+      credits: { gte: DEFAULT_CREDIT_DEDUCTION },
+    },
     data: {
       credits: { decrement: DEFAULT_CREDIT_DEDUCTION },
     },
   });
 
-  return true;
+  return result.count > 0;
 }
 
 export async function getUserCredits(userId: string) {

@@ -133,7 +133,7 @@ export async function updateSourceTable(sourceId: string, status: Status, source
       data: { status, sourceTitle },
     });
   } catch (error) {
-    throw new VectorStoreError(`Failed to save to vector store: ${error}`);
+    throw new Error(`Failed to update source table status: ${error}`);
   }
 }
 

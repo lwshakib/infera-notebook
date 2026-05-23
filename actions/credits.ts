@@ -45,23 +45,42 @@ export async function checkAndResetCredits(userId: string) {
  * @returns boolean - True if deduction was successful, false if insufficient credits.
  */
 export async function deductCredit(userId: string) {
-  const currentCredits = await checkAndResetCredits(userId);
+  // Use a transaction to perform the atomic reset and deduction
+  return await prisma.$transaction(async (tx) => {
+    const user = await tx.user.findUnique({
+      where: { id: userId },
+      select: { credits: true, lastCreditReset: true },
+    });
 
-  if (currentCredits === null || currentCredits <= 0) {
-    return false;
-  }
+    if (!user) return false;
 
-  const result = await prisma.user.updateMany({
-    where: {
-      id: userId,
-      credits: { gte: DEFAULT_CREDIT_DEDUCTION },
-    },
-    data: {
-      credits: { decrement: DEFAULT_CREDIT_DEDUCTION },
-    },
+    let credits = user.credits;
+    const lastReset = new Date(user.lastCreditReset).toDateString();
+    const today = new Date().toDateString();
+
+    if (lastReset !== today) {
+      credits = DEFAULT_CREDITS;
+    }
+
+    if (credits < DEFAULT_CREDIT_DEDUCTION) {
+      return false;
+    }
+
+    const updated = await tx.user.updateMany({
+      where: {
+        id: userId,
+        // Ensure that the state didn't change while we were reading
+        lastCreditReset: user.lastCreditReset,
+        credits: user.credits,
+      },
+      data: {
+        credits: credits - DEFAULT_CREDIT_DEDUCTION,
+        lastCreditReset: new Date(),
+      },
+    });
+
+    return updated.count > 0;
   });
-
-  return result.count > 0;
 }
 
 export async function getUserCredits(userId: string) {

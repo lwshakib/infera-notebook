@@ -13,6 +13,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Audio file is required' }, { status: 400 });
     }
 
+    // 10MB limit
+    const MAX_FILE_SIZE = 10 * 1024 * 1024;
+    if (audioFile.size > MAX_FILE_SIZE) {
+      return NextResponse.json({ error: 'File size exceeds 10MB limit' }, { status: 413 });
+    }
+
     // Convert File to Base64 for Gemini
     const arrayBuffer = await audioFile.arrayBuffer();
     const base64Audio = Buffer.from(arrayBuffer).toString('base64');

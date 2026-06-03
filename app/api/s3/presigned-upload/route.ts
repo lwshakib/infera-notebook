@@ -17,11 +17,27 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing contentType or customPath' }, { status: 400 });
     }
 
+    // Authentication: Get the current user session
+    const { auth } = await import('@/lib/auth');
+    const session = await auth.api.getSession({
+      headers: request.headers,
+    });
+
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const userId = session.user.id;
+
     // Use customPath if provided, otherwise generate a unique one
     let path = customPath;
     if (!path) {
       const fileExtension = contentType?.split('/')[1] || 'bin';
       path = `${folder}/${uuidv4()}.${fileExtension}`;
+    } else {
+      // Security: Sanitize path and enforce prefix
+      const sanitizedPath = customPath.replace(/\.\.\//g, '').replace(/^\/+/, '');
+      path = `users/${userId}/${sanitizedPath}`;
     }
 
     const uploadUrl = await getPresignedUploadUrl(path, contentType || 'application/octet-stream');

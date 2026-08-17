@@ -319,11 +319,11 @@ export function ChatsPanel({ className = '', notebookId }: ChatsPanelProps) {
   return (
     <div
       className={cn(
-        'flex h-full flex-col rounded-2xl bg-background px-2 py-4 text-sm text-muted-foreground xl:px-6',
+        'flex h-full min-h-0 flex-col overflow-hidden rounded-2xl bg-background px-2 py-4 text-sm text-muted-foreground xl:px-6',
         className
       )}
     >
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between shrink-0">
         <p className="text-sm font-bold text-foreground">Chats</p>
       </div>
 

@@ -347,15 +347,15 @@ export default function NotebookPage() {
         </div>
       </header>
 
-      <main className="flex flex-1 min-h-0 flex-col">
+      <main className="flex flex-1 min-h-0 flex-col overflow-hidden">
         {/* Mobile: tabs layout */}
-        <div className="flex flex-1 min-h-0 flex-col px-4 pb-4 pt-2 lg:hidden">
+        <div className="flex flex-1 min-h-0 flex-col px-4 pb-4 pt-2 lg:hidden overflow-hidden">
           <Tabs
             value={activeTab}
             onValueChange={handleTabChange}
-            className="flex h-full flex-col items-center gap-4"
+            className="flex h-full min-h-0 flex-col items-center gap-4 overflow-hidden"
           >
-            <TabsList className="mx-auto rounded-full border border-border bg-card px-1 py-1">
+            <TabsList className="mx-auto rounded-full border border-border bg-card px-1 py-1 shrink-0">
               <TabsTrigger
                 value="source"
                 className="rounded-full px-4 py-1 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
@@ -376,15 +376,15 @@ export default function NotebookPage() {
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="source" className="flex-1 w-full">
+            <TabsContent value="source" className="flex-1 w-full min-h-0 overflow-hidden data-[state=active]:flex data-[state=active]:flex-col mt-0">
               <SourcePanel notebookId={notebookId} />
             </TabsContent>
 
-            <TabsContent value="chats" className="flex-1 w-full">
+            <TabsContent value="chats" className="flex-1 w-full min-h-0 overflow-hidden data-[state=active]:flex data-[state=active]:flex-col mt-0">
               <ChatsPanel notebookId={notebookId} />
             </TabsContent>
 
-            <TabsContent value="notes" className="flex-1 w-full">
+            <TabsContent value="notes" className="flex-1 w-full min-h-0 overflow-hidden data-[state=active]:flex data-[state=active]:flex-col mt-0">
               <NotesPanel notebookId={notebookId} />
             </TabsContent>
           </Tabs>

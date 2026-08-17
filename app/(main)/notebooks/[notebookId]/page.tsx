@@ -376,15 +376,24 @@ export default function NotebookPage() {
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="source" className="flex-1 w-full min-h-0 overflow-hidden data-[state=active]:flex data-[state=active]:flex-col mt-0">
+            <TabsContent
+              value="source"
+              className="flex-1 w-full min-h-0 overflow-hidden data-[state=active]:flex data-[state=active]:flex-col mt-0"
+            >
               <SourcePanel notebookId={notebookId} />
             </TabsContent>
 
-            <TabsContent value="chats" className="flex-1 w-full min-h-0 overflow-hidden data-[state=active]:flex data-[state=active]:flex-col mt-0">
+            <TabsContent
+              value="chats"
+              className="flex-1 w-full min-h-0 overflow-hidden data-[state=active]:flex data-[state=active]:flex-col mt-0"
+            >
               <ChatsPanel notebookId={notebookId} />
             </TabsContent>
 
-            <TabsContent value="notes" className="flex-1 w-full min-h-0 overflow-hidden data-[state=active]:flex data-[state=active]:flex-col mt-0">
+            <TabsContent
+              value="notes"
+              className="flex-1 w-full min-h-0 overflow-hidden data-[state=active]:flex data-[state=active]:flex-col mt-0"
+            >
               <NotesPanel notebookId={notebookId} />
             </TabsContent>
           </Tabs>

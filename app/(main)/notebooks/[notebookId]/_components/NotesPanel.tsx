@@ -834,167 +834,171 @@ export function NotesPanel({ className = '', notebookId }: NotesPanelProps) {
                     ))}
                   </>
                 ) : notes.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-32 text-center opacity-40">
-                  <Icon
-                    icon="mdi:note-outline"
-                    className="h-12 w-12 text-muted-foreground/60 mb-4"
-                  />
-                  <p className="text-sm font-medium text-muted-foreground">No notes here yet.</p>
-                  <p className="text-[11px] text-muted-foreground/80 mt-1 max-w-[180px]">
-                    Your generated summaries and briefings will appear here.
-                  </p>
-                </div>
-              ) : (
-                notes.map((note) => (
-                  <div key={note.id}>
-                    {note.status === Status.PROCESSING ? (
-                      <div className="grid grid-cols-[auto_1fr_auto] items-center p-4 bg-muted/50 rounded-lg relative overflow-hidden">
-                        <div className="absolute inset-0 bg-linear-to-r from-transparent via-primary/20 to-transparent animate-shimmer"></div>
-                        <div className="animate-spin relative z-10 mr-3">
-                          <Loader2 className="h-5 w-5 text-muted-foreground" />
-                        </div>
-                        <div className="min-w-0 relative z-10 pr-4">
-                          <p
-                            className="text-sm font-medium text-foreground truncate px-1"
-                            title={note.noteTitle || ''}
-                          >
-                            {(() => {
-                              const baseText = note.noteTitle?.toLowerCase().includes('saving')
-                                ? note.noteTitle
-                                : `Generating ${note.noteTitle || NOTE_TYPE_LABELS[note.type]}`;
-                              return baseText;
-                            })()}
-                          </p>
-                          <p className="text-xs text-muted-foreground px-1 truncate">
-                            Come back in a few minutes
-                          </p>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="relative z-10 shrink-0"
-                          disabled={loading}
-                          onClick={() => handleCancelProcessing(note)}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ) : note.status === Status.FAILED ? (
-                      <div className="grid grid-cols-[auto_1fr_auto] items-center p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
-                        <div className="rounded-full bg-destructive/20 p-2 mr-3 shrink-0">
-                          <X className="h-4 w-4 text-destructive" />
-                        </div>
-                        <div className="min-w-0 pr-4">
-                          <p
-                            className="text-sm font-medium text-destructive px-1 truncate"
-                            title={note.noteTitle || ''}
-                          >
-                            {`Failed to generate ${note.noteTitle || NOTE_TYPE_LABELS[note.type]}`}
-                          </p>
-                          <p className="text-xs text-destructive/70 px-1 truncate">
-                            This note could not be generated due to an error
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                disabled={deletingId === note.id}
-                                className="text-destructive hover:bg-destructive/10"
-                              >
-                                {deletingId === note.id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <Trash className="h-4 w-4" />
-                                )}
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Delete Failed Note</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Are you sure you want to delete this failed note? This action
-                                  cannot be undone.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => handleDelete(note.id)}
-                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                >
-                                  Delete
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-[1fr_auto] items-center p-4 bg-muted/50 rounded-lg">
-                        <div className="min-w-0 pr-4">
-                          <button
-                            type="button"
-                            onClick={() => handleSelectNote(note)}
-                            className="flex items-center gap-2 text-left w-full min-w-0"
-                          >
-                            <div className="shrink-0">{typeIcon(note.type)}</div>
+                  <div className="flex flex-col items-center justify-center py-32 text-center opacity-40">
+                    <Icon
+                      icon="mdi:note-outline"
+                      className="h-12 w-12 text-muted-foreground/60 mb-4"
+                    />
+                    <p className="text-sm font-medium text-muted-foreground">No notes here yet.</p>
+                    <p className="text-[11px] text-muted-foreground/80 mt-1 max-w-[180px]">
+                      Your generated summaries and briefings will appear here.
+                    </p>
+                  </div>
+                ) : (
+                  notes.map((note) => (
+                    <div key={note.id}>
+                      {note.status === Status.PROCESSING ? (
+                        <div className="grid grid-cols-[auto_1fr_auto] items-center p-4 bg-muted/50 rounded-lg relative overflow-hidden">
+                          <div className="absolute inset-0 bg-linear-to-r from-transparent via-primary/20 to-transparent animate-shimmer"></div>
+                          <div className="animate-spin relative z-10 mr-3">
+                            <Loader2 className="h-5 w-5 text-muted-foreground" />
+                          </div>
+                          <div className="min-w-0 relative z-10 pr-4">
                             <p
-                              className="text-sm font-medium text-foreground px-1 truncate flex-1 min-w-0"
+                              className="text-sm font-medium text-foreground truncate px-1"
                               title={note.noteTitle || ''}
                             >
-                              {note.noteTitle || 'Note'}
+                              {(() => {
+                                const baseText = note.noteTitle?.toLowerCase().includes('saving')
+                                  ? note.noteTitle
+                                  : `Generating ${note.noteTitle || NOTE_TYPE_LABELS[note.type]}`;
+                                return baseText;
+                              })()}
                             </p>
-                          </button>
-                          <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1 px-1 truncate">
-                            <span className="capitalize shrink-0">
-                              {NOTE_TYPE_LABELS[note.type]}
-                            </span>
-                            <span className="shrink-0">•</span>
-                            <span className="truncate">{formatRelative(note.createdAt)}</span>
+                            <p className="text-xs text-muted-foreground px-1 truncate">
+                              Come back in a few minutes
+                            </p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="relative z-10 shrink-0"
+                            disabled={loading}
+                            onClick={() => handleCancelProcessing(note)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ) : note.status === Status.FAILED ? (
+                        <div className="grid grid-cols-[auto_1fr_auto] items-center p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+                          <div className="rounded-full bg-destructive/20 p-2 mr-3 shrink-0">
+                            <X className="h-4 w-4 text-destructive" />
+                          </div>
+                          <div className="min-w-0 pr-4">
+                            <p
+                              className="text-sm font-medium text-destructive px-1 truncate"
+                              title={note.noteTitle || ''}
+                            >
+                              {`Failed to generate ${note.noteTitle || NOTE_TYPE_LABELS[note.type]}`}
+                            </p>
+                            <p className="text-xs text-destructive/70 px-1 truncate">
+                              This note could not be generated due to an error
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  disabled={deletingId === note.id}
+                                  className="text-destructive hover:bg-destructive/10"
+                                >
+                                  {deletingId === note.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Trash className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Failed Note</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to delete this failed note? This action
+                                    cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => handleDelete(note.id)}
+                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                  >
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
                           </div>
                         </div>
-                        <div className="flex items-center gap-1">
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="ghost" size="icon" disabled={deletingId === note.id}>
-                                {deletingId === note.id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <Trash className="h-4 w-4" />
-                                )}
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Delete Note</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Are you sure you want to delete this note? This action cannot be
-                                  undone.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => handleDelete(note.id)}
-                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      ) : (
+                        <div className="grid grid-cols-[1fr_auto] items-center p-4 bg-muted/50 rounded-lg">
+                          <div className="min-w-0 pr-4">
+                            <button
+                              type="button"
+                              onClick={() => handleSelectNote(note)}
+                              className="flex items-center gap-2 text-left w-full min-w-0"
+                            >
+                              <div className="shrink-0">{typeIcon(note.type)}</div>
+                              <p
+                                className="text-sm font-medium text-foreground px-1 truncate flex-1 min-w-0"
+                                title={note.noteTitle || ''}
+                              >
+                                {note.noteTitle || 'Note'}
+                              </p>
+                            </button>
+                            <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1 px-1 truncate">
+                              <span className="capitalize shrink-0">
+                                {NOTE_TYPE_LABELS[note.type]}
+                              </span>
+                              <span className="shrink-0">•</span>
+                              <span className="truncate">{formatRelative(note.createdAt)}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  disabled={deletingId === note.id}
                                 >
-                                  Delete
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
+                                  {deletingId === note.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Trash className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Note</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to delete this note? This action cannot be
+                                    undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => handleDelete(note.id)}
+                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                  >
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
                         </div>
-                      </div>
-                    )}
-                  </div>
-                ))
-              )}
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
-          </div>
-        </ScrollArea>
+          </ScrollArea>
 
           {/* Floating Action Button (FAB) */}
           <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 pointer-events-none">

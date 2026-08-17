@@ -690,151 +690,150 @@ export function NotesPanel({ className = '', notebookId }: NotesPanelProps) {
         </>
       ) : (
         <>
-          <div className="space-y-4 shrink-0">
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-              {noteNodes
-                .filter(
-                  (n) =>
-                    !(
-                      [
-                        AllowedNoteType.EDITABLE_NOTE,
-                        AllowedNoteType.FAQ,
-                        AllowedNoteType.TIMELINE,
-                        AllowedNoteType.BRIEFING_DOC,
-                        AllowedNoteType.SLIDE_DECK,
-                        AllowedNoteType.INFOGRAPHIC,
-                      ] as AllowedNoteType[]
-                    ).includes(n.type)
-                )
-                .map((config) => {
-                  const Icon = config.icon;
-                  const handleClick =
-                    config.type === AllowedNoteType.AUDIO_OVERVIEW
-                      ? createAudio
-                      : config.type === AllowedNoteType.VIDEO_OVERVIEW
-                        ? createVideo
-                        : config.type === AllowedNoteType.MIND_MAP
-                          ? createMindMap
-                          : config.type === AllowedNoteType.QUIZ
-                            ? createQuiz
-                            : createFlashCards;
+          <ScrollArea className="flex-1 min-h-0">
+            <div className="space-y-6 pr-3">
+              <div className="grid grid-cols-2 xl:grid-cols-3 gap-2.5">
+                {noteNodes
+                  .filter(
+                    (n) =>
+                      !(
+                        [
+                          AllowedNoteType.EDITABLE_NOTE,
+                          AllowedNoteType.FAQ,
+                          AllowedNoteType.TIMELINE,
+                          AllowedNoteType.BRIEFING_DOC,
+                          AllowedNoteType.SLIDE_DECK,
+                          AllowedNoteType.INFOGRAPHIC,
+                        ] as AllowedNoteType[]
+                      ).includes(n.type)
+                  )
+                  .map((config) => {
+                    const Icon = config.icon;
+                    const handleClick =
+                      config.type === AllowedNoteType.AUDIO_OVERVIEW
+                        ? createAudio
+                        : config.type === AllowedNoteType.VIDEO_OVERVIEW
+                          ? createVideo
+                          : config.type === AllowedNoteType.MIND_MAP
+                            ? createMindMap
+                            : config.type === AllowedNoteType.QUIZ
+                              ? createQuiz
+                              : createFlashCards;
 
-                  return (
+                    return (
+                      <Button
+                        key={config.type}
+                        variant="outline"
+                        className="w-full justify-start relative group px-3 py-2 h-auto text-xs"
+                        onClick={handleClick}
+                        disabled={!hasSelectedSources}
+                      >
+                        <Icon className="mr-2 h-4 w-4 shrink-0 transition-colors group-hover:text-primary" />
+                        <span className="truncate flex-1 text-left">{config.label}</span>
+                        {config.beta && (
+                          <span className="ml-1 px-1.5 py-0.5 rounded-full bg-primary/10 text-[9px] font-bold text-primary border border-primary/20 tracking-wider shrink-0">
+                            BETA
+                          </span>
+                        )}
+                      </Button>
+                    );
+                  })}
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
                     <Button
-                      key={config.type}
                       variant="outline"
-                      className="w-full justify-start relative group"
-                      onClick={handleClick}
+                      className="w-full justify-start relative group px-3 py-2 h-auto text-xs"
                       disabled={!hasSelectedSources}
                     >
-                      <Icon className="mr-2 h-4 w-4 shrink-0 transition-colors group-hover:text-primary" />
-                      <span className="truncate flex-1 text-left">{config.label}</span>
-                      {config.beta && (
-                        <span className="ml-2 px-1.5 py-0.5 rounded-full bg-primary/10 text-[9px] font-bold text-primary border border-primary/20 tracking-wider">
-                          BETA
-                        </span>
-                      )}
+                      <FileText className="mr-2 h-4 w-4 shrink-0 transition-colors group-hover:text-primary" />
+                      <span className="truncate flex-1 text-left">Report</span>
+                      <ChevronDown className="ml-1 h-3.5 w-3.5 opacity-50 shrink-0" />
                     </Button>
-                  );
-                })}
-
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className="w-full justify-start relative group"
-                    disabled={!hasSelectedSources}
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="start"
+                    className="w-56 bg-zinc-950 border-white/10 text-white"
                   >
-                    <FileText className="mr-2 h-4 w-4 shrink-0 transition-colors group-hover:text-primary" />
-                    <span className="truncate flex-1 text-left">Report</span>
-                    <ChevronDown className="ml-2 h-3.5 w-3.5 opacity-50" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="start"
-                  className="w-56 bg-zinc-950 border-white/10 text-white"
-                >
-                  {[
-                    noteNodes.find((n) => n.type === AllowedNoteType.FAQ),
-                    noteNodes.find((n) => n.type === AllowedNoteType.TIMELINE),
-                    noteNodes.find((n) => n.type === AllowedNoteType.BRIEFING_DOC),
-                    noteNodes.find((n) => n.type === AllowedNoteType.SLIDE_DECK),
-                    noteNodes.find((n) => n.type === AllowedNoteType.INFOGRAPHIC),
-                  ]
-                    .filter(Boolean)
-                    .map((config) => {
-                      if (!config) return null;
-                      const Icon = config.icon;
-                      const handleClick =
-                        config.type === AllowedNoteType.FAQ
-                          ? createFAQ
-                          : config.type === AllowedNoteType.TIMELINE
-                            ? createTimeline
-                            : config.type === AllowedNoteType.BRIEFING_DOC
-                              ? createBriefing
-                              : config.type === AllowedNoteType.SLIDE_DECK
-                                ? createSlideDeck
-                                : createInfographic;
+                    {[
+                      noteNodes.find((n) => n.type === AllowedNoteType.FAQ),
+                      noteNodes.find((n) => n.type === AllowedNoteType.TIMELINE),
+                      noteNodes.find((n) => n.type === AllowedNoteType.BRIEFING_DOC),
+                      noteNodes.find((n) => n.type === AllowedNoteType.SLIDE_DECK),
+                      noteNodes.find((n) => n.type === AllowedNoteType.INFOGRAPHIC),
+                    ]
+                      .filter(Boolean)
+                      .map((config) => {
+                        if (!config) return null;
+                        const Icon = config.icon;
+                        const handleClick =
+                          config.type === AllowedNoteType.FAQ
+                            ? createFAQ
+                            : config.type === AllowedNoteType.TIMELINE
+                              ? createTimeline
+                              : config.type === AllowedNoteType.BRIEFING_DOC
+                                ? createBriefing
+                                : config.type === AllowedNoteType.SLIDE_DECK
+                                  ? createSlideDeck
+                                  : createInfographic;
 
-                      return (
-                        <DropdownMenuItem
-                          key={config.type}
-                          onClick={handleClick}
-                          className="flex items-center gap-2 cursor-pointer hover:bg-white/5 focus:bg-white/5"
-                        >
-                          <Icon className="h-4 w-4 shrink-0 opacity-70" />
-                          <span className="text-xs flex-1 truncate">{config.label}</span>
-                          {config.beta && (
-                            <span className="px-1 py-0.5 rounded-full bg-primary/10 text-[8px] font-bold text-primary border border-primary/20 tracking-wider">
-                              BETA
-                            </span>
-                          )}
-                        </DropdownMenuItem>
-                      );
-                    })}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </div>
-
-          <ScrollArea className="flex-1 min-h-0 mt-6">
-            {selectedFaq && selectedFaq.length > 0 ? (
-              <div className="mt-4 rounded-xl border border-white/10 bg-[#0b0b12] p-4 text-xs text-white/80">
-                <div className="space-y-4">
-                  {selectedFaq.map((item, idx) => (
-                    <div key={idx}>
-                      {item.question}
-                      {item.answer}
-                    </div>
-                  ))}
-                </div>
+                        return (
+                          <DropdownMenuItem
+                            key={config.type}
+                            onClick={handleClick}
+                            className="flex items-center gap-2 cursor-pointer hover:bg-white/5 focus:bg-white/5"
+                          >
+                            <Icon className="h-4 w-4 shrink-0 opacity-70" />
+                            <span className="text-xs flex-1 truncate">{config.label}</span>
+                            {config.beta && (
+                              <span className="px-1 py-0.5 rounded-full bg-primary/10 text-[8px] font-bold text-primary border border-primary/20 tracking-wider">
+                                BETA
+                              </span>
+                            )}
+                          </DropdownMenuItem>
+                        );
+                      })}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
-            ) : null}
-            {error ? <div className="px-4 py-2 text-xs text-red-300">{error}</div> : null}
-            <div className="grid gap-4">
-              {loading ? (
-                <>
-                  {Array.from({ length: 3 }).map((_, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center justify-between p-4 bg-muted/50 rounded-lg"
-                    >
-                      <div className="flex flex-col gap-2 flex-1">
-                        <div className="flex items-center gap-2">
-                          <Skeleton className="h-4 w-4 rounded" />
-                          <Skeleton className="h-4 w-32" />
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <Skeleton className="h-3 w-16" />
-                          <Skeleton className="h-3 w-3 rounded-full" />
-                          <Skeleton className="h-3 w-20" />
-                        </div>
+
+              {selectedFaq && selectedFaq.length > 0 ? (
+                <div className="mt-4 rounded-xl border border-white/10 bg-[#0b0b12] p-4 text-xs text-white/80">
+                  <div className="space-y-4">
+                    {selectedFaq.map((item, idx) => (
+                      <div key={idx}>
+                        {item.question}
+                        {item.answer}
                       </div>
-                      <Skeleton className="h-8 w-8 rounded" />
-                    </div>
-                  ))}
-                </>
-              ) : notes.length === 0 ? (
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              {error ? <div className="px-4 py-2 text-xs text-red-300">{error}</div> : null}
+              <div className="grid gap-4 pb-12">
+                {loading ? (
+                  <>
+                    {Array.from({ length: 3 }).map((_, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between p-4 bg-muted/50 rounded-lg"
+                      >
+                        <div className="flex flex-col gap-2 flex-1">
+                          <div className="flex items-center gap-2">
+                            <Skeleton className="h-4 w-4 rounded" />
+                            <Skeleton className="h-4 w-32" />
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <Skeleton className="h-3 w-16" />
+                            <Skeleton className="h-3 w-3 rounded-full" />
+                            <Skeleton className="h-3 w-20" />
+                          </div>
+                        </div>
+                        <Skeleton className="h-8 w-8 rounded" />
+                      </div>
+                    ))}
+                  </>
+                ) : notes.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-32 text-center opacity-40">
                   <Icon
                     icon="mdi:note-outline"
@@ -994,7 +993,8 @@ export function NotesPanel({ className = '', notebookId }: NotesPanelProps) {
                 ))
               )}
             </div>
-          </ScrollArea>
+          </div>
+        </ScrollArea>
 
           {/* Floating Action Button (FAB) */}
           <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 pointer-events-none">

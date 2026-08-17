@@ -27,24 +27,40 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Deduct credit
-    const success = await deductCredit(user.id);
-    if (!success) {
-      return NextResponse.json(
-        { error: 'Credits exhausted. Please wait for the daily reset.' },
-        { status: 403 }
-      );
-    }
     const { sourceIds, messages, notebookId } = await req.json();
 
     if (!notebookId) {
       return NextResponse.json({ error: 'notebookId is required' }, { status: 400 });
     }
 
+    // Verify notebook ownership to prevent IDOR vulnerabilities
+    const notebook = await prisma.notebook.findFirst({
+      where: {
+        id: notebookId,
+        userId: user.id,
+      },
+    });
+
+    if (!notebook) {
+      return NextResponse.json(
+        { error: 'Forbidden: You do not have access to this notebook' },
+        { status: 403 }
+      );
+    }
+
     // Get the last message (user's current message)
-    const lastMessage = messages[messages.length - 1];
+    const lastMessage = messages?.[messages?.length - 1];
     if (!lastMessage || lastMessage.role !== 'user') {
       return NextResponse.json({ error: 'Last message must be from user' }, { status: 400 });
+    }
+
+    // Deduct credit after verifying notebook ownership and input payload
+    const success = await deductCredit(user.id);
+    if (!success) {
+      return NextResponse.json(
+        { error: 'Credits exhausted. Please wait for the daily reset.' },
+        { status: 403 }
+      );
     }
 
     // Capture parts for persistence - handle both format variations
